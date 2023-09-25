@@ -1,5 +1,6 @@
 from typing import Optional, Tuple
 from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
+from claude_retriever.prompts import citations_prompt, retrieval_prompt
 from .searcher.types import SearchTool, SearchResult, Tool
 import logging
 import re
@@ -7,22 +8,8 @@ from utils import format_results_full
 
 logger = logging.getLogger(__name__)
 
-RETRIEVAL_PROMPT = """
-You will be given a query by a human user. Your job is solely to gather information from an external knowledge base that would help the user answer the query. To gather this information, you have been equipped with a search engine tool that you can use to query the external knowledge base. Here is a description of the search engine tool: <tool_description>{description}</tool_description>
-
-You can make a call to the search engine tool by inserting a query within <search_query> tags like so: <search_query>query</search_query>. You'll then get results back within <search_result></search_result> tags. After these results back within, reflect briefly inside <search_quality></search_quality> tags about whether all the results together provide enough information to help the user answer the query, or whether more information is needed.
-
-Before beginning to research the query, first think for a moment inside <thinking></thinking> tags about what information is necessary to gather to create a well-informed answer. 
-
-If the query is complex, you may need to decompose the query into multiple subqueries and execute them individually. Sometimes the search engine will return empty search results, or the search results may not contain the information you need. In such cases, feel free to search again with a different query.
-
-Do not try to answer the query. Your only job is to gather relevant search results that will help the user answer the query.
-
-Here is the query: <query>{query}</query> 
-"""
-
-ANSWER_PROMPT = """
-<search_results>{results}</search_results> Using the search results provided within the <search_results></search_results> tags, please answer the following query <query>{query}</query>.
+SIMPLE_ANSWER_PROMPT = """
+{results} Using the search results provided within the <search_results></search_results> tags, please answer the following query <query>{query}</query>.
 """
 
 class ClientWithRetrieval(Anthropic):
@@ -60,13 +47,12 @@ class ClientWithRetrieval(Anthropic):
         """
         assert self.search_tool is not None, "SearchTool must be provided to use .retrieve()"
 
-        description = self.search_tool.tool_description
-        prompt = f"{HUMAN_PROMPT} {RETRIEVAL_PROMPT.format(query=query, description=description)}{AI_PROMPT}"
+        prompt = retrieval_prompt(self.search_tool.tool_name, self.search_tool.tool_description, query)
         token_budget = max_tokens_to_sample
         all_raw_search_results: list[SearchResult] = []
         for tries in range(max_searches_to_try):
             partial_completion = self.completions.create(prompt = prompt,
-                                                     stop_sequences=stop_sequences + ['</search_query>'],
+                                                     stop_sequences=stop_sequences + ['</function_calls>'],
                                                      model=model,
                                                      max_tokens_to_sample = token_budget,
                                                      temperature = temperature)
@@ -74,10 +60,10 @@ class ClientWithRetrieval(Anthropic):
             logger.info(partial_completion)
             token_budget -= self.count_tokens(partial_completion)
             prompt += partial_completion
-            if stop_reason == 'stop_sequence' and stop_seq == '</search_query>':
+            if stop_reason == 'stop_sequence' and stop_seq == '</function_calls>':
                 logger.info(f'Attempting search number {tries}.')
                 raw_search_results, formatted_search_results = self._search_query_stop(partial_completion, n_search_results_to_use)
-                prompt += '</search_query>' + formatted_search_results
+                prompt += '</function_calls>' + formatted_search_results
                 all_raw_search_results += raw_search_results
             else:
                 break
@@ -90,17 +76,18 @@ class ClientWithRetrieval(Anthropic):
         Returns:
             str: Claude's answer to the query
         """
-        if isinstance(raw_search_results[0], str):
-            search_results  = [SearchResult(content=s) for s in raw_search_results] # type: ignore
 
-        if format_results:
-            processed_search_results = [search_result.content.strip() for search_result in search_results] # type: ignore
-            formatted_search_results = format_results_full(processed_search_results)
-        else:
-            formatted_search_results = raw_search_results
+        if isinstance(raw_search_results[0], str):
+            raw_search_results  = [SearchResult(content=s, source=str(hash(s))) for s in raw_search_results] # type: ignore
         
-        prompt = f"{HUMAN_PROMPT} {ANSWER_PROMPT.format(query=query, results=formatted_search_results)}{AI_PROMPT}"
+        processed_search_results = [[result.source, result.content.strip()] for result in raw_search_results] # type: ignore
+        formatted_search_results = format_results_full(processed_search_results)
+
+        # Use the SIMPLE_ANSWER_PROMPT if you do not want citations in your answer
+        # prompt = f"{HUMAN_PROMPT} {SIMPLE_ANSWER_PROMPT.format(query=query, results=formatted_search_results)}{AI_PROMPT}"
         
+        prompt = citations_prompt(formatted_search_results, query)
+
         answer = self.completions.create(
             prompt=prompt, 
             model=model, 
@@ -150,12 +137,11 @@ class ClientWithRetrieval(Anthropic):
                 str: Formatted search result text
         """
         assert self.search_tool is not None, "SearchTool was not provided for client"
-
-        search_query = self.extract_between_tags('search_query', partial_completion + '</search_query>') 
+        search_query = self.extract_between_tags('query', partial_completion + '</query>') 
         if search_query is None:
-            raise Exception(f'Completion with retrieval failed as partial completion returned mismatched <search_query> tags.')
+            raise Exception(f'Completion with retrieval failed as partial completion returned mismatched <query> tags.')
         if self.verbose:
-            logger.info('\n'+'-'*20 + f'\nPausing stream because Claude has issued a query in <search_query> tags: <search_query>{search_query}</search_query>\n' + '-'*20)
+            logger.info('\n'+'-'*20 + f'\nPausing stream because Claude has issued a query in <query> tags: <query>{search_query}</query>\n' + '-'*20)
         logger.info(f'Running search query against SearchTool: {search_query}')
         search_results = self.search_tool.raw_search(search_query, n_search_results_to_use)
         extracted_search_results = self.search_tool.process_raw_search_results(search_results)

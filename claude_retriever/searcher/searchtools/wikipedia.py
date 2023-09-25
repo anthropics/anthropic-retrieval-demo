@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 # Wikipedia Searcher
 
-WIKIPEDIA_DESCRIPTION = """Wikipedia Search Engine Tool: 
+WIKIPEDIA_DESCRIPTION = """
 The search engine will exclusively search over Wikipedia for pages similar to your query. It returns for each page its title and the full page content. Use this tool to get up-to-date and comprehensive information on a topic. Queries made to this tool should be as atomic as possible. The tool provides broad topic keywords rather than niche search topics. For example, if the query is "Can you tell me about Odysseus's journey in the Odyssey?" the search query you make should be "Odyssey". Here's another example: if the query is "Who created the first neural network?", your first query should be "neural network". As you can see, these queries are quite short. Think generalized keywords, not phrases. 
 """
 
@@ -20,8 +20,10 @@ class WikipediaSearchResult(SearchResult):
 class WikipediaSearchTool(SearchTool):
 
     def __init__(self,
+                 tool_name: str = "Wikpedia Search Engine",
                  tool_description: str = WIKIPEDIA_DESCRIPTION,
                  truncate_to_n_tokens: Optional[int] = 5000):
+        self.tool_name = tool_name
         self.tool_description = tool_description
         self.truncate_to_n_tokens = truncate_to_n_tokens
         if truncate_to_n_tokens is not None:
@@ -31,8 +33,8 @@ class WikipediaSearchTool(SearchTool):
         search_results = self._search(query, n_search_results_to_use)
         return search_results
     
-    def process_raw_search_results(self, results: list[WikipediaSearchResult]) -> list[str]:
-        processed_search_results = [f'Page Title: {result.title.strip()}\nPage Content:\n{self.truncate_page_content(result.content)}' for result in results]
+    def process_raw_search_results(self, results: list[WikipediaSearchResult]) -> list[list[str]]:
+        processed_search_results = [[result.source, f'Page Title: {result.title.strip()}\nPage Content:\n{self.truncate_page_content(result.content)}'] for result in results]
         return processed_search_results
 
     def truncate_page_content(self, page_content: str) -> str:
@@ -54,5 +56,6 @@ class WikipediaSearchTool(SearchTool):
                 continue
             content = page.content
             title = page.title
-            search_results.append(WikipediaSearchResult(content=content, title=title))
+            source = page.url
+            search_results.append(WikipediaSearchResult(content=content, title=title, source=source))
         return search_results

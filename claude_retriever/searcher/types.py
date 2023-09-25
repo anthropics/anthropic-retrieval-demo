@@ -69,8 +69,10 @@ class SearchResult:
     A single search result.
     """
     content: str
+    source: str
 
 class Tool(ABC):
+    tool_name: str
     tool_description: str
 
 class SearchTool(Tool):
@@ -78,7 +80,8 @@ class SearchTool(Tool):
     A search tool that can run a query and return a formatted string of search results.
     """
 
-    def __init__(self, tool_description: str):
+    def __init__(self, tool_name: str, tool_description: str):
+        self.tool_name = tool_name
         self.tool_description = tool_description
 
     @abstractmethod
@@ -94,7 +97,7 @@ class SearchTool(Tool):
     @abstractmethod
     def process_raw_search_results(
         self, results: list[SearchResult],
-    ) -> list[str]:
+    ) -> list[list[str]]:
         """
         Extracts the raw search content from the search results and returns a list of strings that can be passed to Claude.
 

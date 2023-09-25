@@ -10,7 +10,8 @@ logger = logging.getLogger(__name__)
 
 class EmbeddingSearchTool(SearchTool):
 
-    def __init__(self, tool_description: str, vector_store: VectorStore, embedder: Optional[Embedder] = None):
+    def __init__(self, tool_name: str, tool_description: str, vector_store: VectorStore, embedder: Optional[Embedder] = None):
+        self.tool_name = tool_name
         self.tool_description = tool_description
         if embedder is None:
             logger.info(f"Using default embedder: {DEFAULT_EMBEDDER}")
@@ -23,7 +24,7 @@ class EmbeddingSearchTool(SearchTool):
         search_results = self.vector_store.query(query_embedding, n_search_results_to_use=n_search_results_to_use)
         return search_results
     
-    def process_raw_search_results(self, results: list[SearchResult]) -> list[str]:
-        processed_search_results = [result.content for result in results]
+    def process_raw_search_results(self, results: list[SearchResult]) -> list[list[str]]:
+        processed_search_results = [[result.source, result.content.strip()] for result in results]
         return processed_search_results
     

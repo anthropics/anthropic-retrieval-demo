@@ -15,7 +15,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Formatting search results
-def format_results(extracted: list[str]) -> str:
+def format_results(extracted: list[list[str]]) -> str:
         """
         Joins and formats the extracted search results as a string.
 
@@ -23,13 +23,13 @@ def format_results(extracted: list[str]) -> str:
         """
         result = "\n".join(
             [
-                f'<item index="{i+1}">\n<page_content>\n{r}\n</page_content>\n</item>'
+                f'<item index="{i+1}">\n<source>{r[0]}</source>\n<page_content>\n{r[1]}\n</page_content>\n</item>'
                 for i, r in enumerate(extracted)
             ]
         )
         return result
 
-def format_results_full(extracted: list[str]) -> str:
+def format_results_full(extracted: list[list[str]]) -> str:
     """
     Formats the extracted search results as a string, including the <search_results> tags.
 

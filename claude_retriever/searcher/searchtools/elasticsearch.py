@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 class ElasticsearchCloudSearchTool(SearchTool):
 
     def __init__(self,
+                tool_name: str,
                 tool_description: str,
                 elasticsearch_cloud_id: str,
                 elasticsearch_api_key_id: str,
@@ -24,6 +25,7 @@ class ElasticsearchCloudSearchTool(SearchTool):
         self.api_key = elasticsearch_api_key
         self._connect_to_elasticsearch()
 
+        self.tool_name = tool_name
         self.tool_description = tool_description
         self.truncate_to_n_tokens = truncate_to_n_tokens
         if truncate_to_n_tokens is not None:
@@ -55,11 +57,11 @@ class ElasticsearchCloudSearchTool(SearchTool):
             if len(search_results) >= n_search_results_to_use:
                 break
             content = result["_source"]["text"]
-            search_results.append(SearchResult(content=content))
+            search_results.append(SearchResult(source=str(hash(content)), content=content))
 
         return search_results
     
-    def process_raw_search_results(self, results: list[SearchResult]) -> list[str]:
-        processed_search_results = [self.truncate_page_content(result.content) for result in results]
+    def process_raw_search_results(self, results: list[SearchResult]) -> list[list[str]]:
+        processed_search_results = [[result.source, self.truncate_page_content(result.content)] for result in results]
         return processed_search_results
     

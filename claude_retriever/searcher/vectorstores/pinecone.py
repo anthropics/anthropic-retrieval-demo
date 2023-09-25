@@ -46,7 +46,7 @@ class PineconeVectorStore(VectorStore):
         results = self.pinecone_index.query(
             vector=query_embedding.embedding, top_k=n_search_results_to_use, include_metadata=True
         )
-        results=[SearchResult(content=match['metadata']['text']) for match in results.matches]
+        results=[SearchResult(source=str(hash(match['metadata']['text'])), content=match['metadata']['text']) for match in results.matches]
         return results
 
     def upsert(self, embeddings: list[Embedding], upsert_batch_size: int = 128) -> None:
@@ -118,7 +118,7 @@ class PineconeHybridVectorStore(PineconeVectorStore):
         sparse_results = sparse_results[:min(n_sparse_results, len(sparse_results))]
 
         results = dense_results + sparse_results
-        results = [SearchResult(content=match['metadata']['text']) for match in results]
+        results = [SearchResult(source=str(hash(match['metadata']['text'])), content=match['metadata']['text']) for match in results]
 
         return results
     
@@ -162,7 +162,7 @@ class PineconeHybridVectorStore(PineconeVectorStore):
             include_metadata=True
         )
 
-        results = [SearchResult(content=match['metadata']['text']) for match in results.matches]
+        results = [SearchResult(source=str(hash(match['metadata']['text'])), content=match['metadata']['text']) for match in results.matches]
 
         return results
         

@@ -10,13 +10,9 @@ from tenacity import retry, wait_exponential, stop_after_attempt
 import logging
 logger = logging.getLogger(__name__)
 
-@dataclass
-class WebSearchResult(SearchResult):
-    url: str
-
 # Brave Searcher
 
-BRAVE_DESCRIPTION = """Brave Search Engine Tool: The search engine will search using the Brave search engine for web pages with keywords similar to your query. It returns for each page its title, a summary and potentially the full page content. Use this tool if you want to get up-to-date and comprehensive information on a topic."""
+BRAVE_DESCRIPTION = """The search engine will search using the Brave search engine for web pages with keywords similar to your query. It returns for each page its title, a summary and potentially the full page content. Use this tool if you want to get up-to-date and comprehensive information on a topic."""
 
 class BraveAPI:
     def __init__(self, api_key: str):
@@ -41,6 +37,7 @@ class BraveAPI:
 class BraveSearchTool(SearchTool):
 
     def __init__(self, brave_api_key: str,
+                 tool_name: str = "Brave Search Engine",
                  tool_description: str = BRAVE_DESCRIPTION,
                  summarize_with_claude: bool = False,
                  anthropic_api_key: Optional[str] = None):
@@ -52,6 +49,7 @@ class BraveSearchTool(SearchTool):
         """
 
         self.api = BraveAPI(brave_api_key)
+        self.tool_name = tool_name
         self.tool_description = tool_description
         self.summarize_with_claude = summarize_with_claude
         if summarize_with_claude and anthropic_api_key is None:
@@ -61,7 +59,7 @@ class BraveSearchTool(SearchTool):
                 raise ValueError("If you want to summarize with Claude, you must provide an anthropic_api_key.")
         self.anthropic_api_key = anthropic_api_key
 
-    def parse_faq(self, faq: dict) -> WebSearchResult:
+    def parse_faq(self, faq: dict) -> SearchResult:
         """
         https://api.search.brave.com/app/documentation/responses#FAQ
         """
@@ -69,12 +67,12 @@ class BraveSearchTool(SearchTool):
 Question: {faq.get('question', "Unknown")}
 Answer: {faq.get('answer', "Unknown")}"""
         
-        return WebSearchResult(
-            url=faq.get("url", ""),
+        return SearchResult(
+            source=faq.get("url", ""),
             content=snippet
         )
     
-    def parse_news(self, news_item: dict) -> Optional[WebSearchResult]:
+    def parse_news(self, news_item: dict) -> Optional[SearchResult]:
         """
         https://api.search.brave.com/app/documentation/responses#News
         """
@@ -89,8 +87,8 @@ News Article Description: {article_description}
 News Article Age: {news_item.get("age", "Unknown")}
 News Article Source: {news_item.get("meta_url", {}).get('hostname', "Unknown")}"""
         
-        return WebSearchResult(
-            url=news_item.get("url", ""),
+        return SearchResult(
+            source=news_item.get("url", ""),
             content=snippet
         )
 
@@ -103,7 +101,7 @@ News Article Source: {news_item.get("meta_url", {}).get('hostname', "Unknown")}"
             .replace("&#x27;", "'")
         )
     
-    async def parse_web(self, web_item: dict, query: str) -> WebSearchResult:
+    async def parse_web(self, web_item: dict, query: str) -> SearchResult:
         """
         https://api.search.brave.com/app/documentation/responses#Search
         """
@@ -128,13 +126,13 @@ Web Page Description: {description}"""
                 snippet+="\nWeb Page Content: "+content
         except:
             logger.warning(f"Failed to scrape {url}")
-        return WebSearchResult(
-            url=url,
+        return SearchResult(
+            source=url,
             content=snippet
         )
 
 
-    def raw_search(self, query: str, n_search_results_to_use: int) -> list[WebSearchResult]:
+    def raw_search(self, query: str, n_search_results_to_use: int) -> list[SearchResult]:
         """
         Run a search using the BraveAPI and return search results. Here are some details on the Brave API:
 
@@ -168,7 +166,7 @@ Web Page Description: {description}"""
 
         # Get the search results
 
-        search_results: list[WebSearchResult] = []
+        search_results: list[SearchResult] = []
         async_web_parser_loop = asyncio.get_event_loop()
         web_parsing_tasks = [] # We'll queue up the web parsing tasks here, since they're costly
 
@@ -178,8 +176,8 @@ Web Page Description: {description}"""
                 web_item = web_items.pop(0)
                 ## We'll add a placeholder search result here, and then replace it with the parsed web result later
                 url = web_item.get("url", "")
-                placeholder_search_result = WebSearchResult(
-                    url=url,
+                placeholder_search_result = SearchResult(
+                    source=url,
                     content=f"Web Page Title: {web_item.get('title', '')}\nWeb Page URL: {url}\nWeb Page Description: {self.remove_strong(web_item.get('description', ''))}"
                 )
                 search_results.append(placeholder_search_result)
@@ -198,15 +196,15 @@ Web Page Description: {description}"""
 
         ## Replace the placeholder search results with the parsed web results
         web_results = async_web_parser_loop.run_until_complete(asyncio.gather(*web_parsing_tasks))
-        web_results_urls = [web_result.url for web_result in web_results]
+        web_results_urls = [web_result.source for web_result in web_results]
         for i, search_result in enumerate(search_results):
-            url = search_result.url
+            url = search_result.source
             if url in web_results_urls:
                 search_results[i] = web_results[web_results_urls.index(url)]
 
         return search_results
     
-    def process_raw_search_results(self, results: list[SearchResult]) -> list[str]:
+    def process_raw_search_results(self, results: list[SearchResult]) -> list[list[str]]:
         # We don't need to do any processing here, since we already formatted the results in the `parse` functions.
-        processed_search_results = [result.content.strip() for result in results]
+        processed_search_results = [[result.source, result.content.strip()] for result in results]
         return processed_search_results

@@ -72,7 +72,7 @@ class LocalVectorStore(VectorStore):
             logger.warning("No embeddings in datastore. Returning empty list.")
             return []
         best_matches = self._nearest_neighbors(query_embedding, n_search_results_to_use)
-        results = [SearchResult(content=match.text) for match in best_matches]
+        results = [SearchResult(source=str(hash(match.text)),content=match.text) for match in best_matches]
         return results
     
     def upsert(self, embeddings: list[Embedding]) -> None:
@@ -256,7 +256,7 @@ class LocalHybridVectorStore(VectorStore):
             best_matches = self._query_weighted(query_embedding, n_search_results_to_use, sparse_weight=sparse_weight)
         else:
             best_matches = self._query_weighted(query_embedding, n_search_results_to_use, sparse_weight=0.0) # default to dense only
-        results = [SearchResult(content=match.text) for match in best_matches]
+        results = [SearchResult(source=str(hash(match.text)), content=match.text) for match in best_matches]
         return results
     
     def upsert(self, embeddings: list[HybridEmbedding]) -> None:
