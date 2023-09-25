@@ -63,7 +63,8 @@ def retrieval_prompt(tool_name, tool_description, user_input):
 
 def citations_prompt(search_results, user_input):
     prompt = f"""
-    You're going to talk with a human. Please be helpful, honest, and harmless. Please make sure to think carefully, step-by-step when answering the human.
+    
+    Human: You're going to talk with a human. Please be helpful, honest, and harmless. Please make sure to think carefully, step-by-step when answering the human.
     <strategy>
     If you are provided with search results in the following format:
 
@@ -113,7 +114,7 @@ def citations_prompt(search_results, user_input):
     Note that you should output exactly one <bib_item> tag per <cite> tag. I.e. there must be a one-to-one relationship
     between <bib_item> tags and <cite> tags.
 
-    - Other than giving citations, do not mention the search results in your answer.
+    - Other than giving citations, do not mention or make reference to the search results in any fashion in your answer.
     - Make sure to put your citations in your final answer, which should be in <result> tags.
 
     </strategy>    
@@ -123,6 +124,7 @@ def citations_prompt(search_results, user_input):
     Query:
     {user_input}
     
+    Assistant:
     """
 
     return prompt
