@@ -306,7 +306,7 @@ from claude_retriever.searcher.searchtools.websearch import BraveSearchTool
 brave_search_tool = BraveSearchTool(brave_api_key=os.environ["BRAVE_API_KEY"], summarize_with_claude=True, anthropic_api_key=os.environ["ANTHROPIC_API_KEY"])
 
 client = claude_retriever.ClientWithRetrieval(api_key=os.environ['ANTHROPIC_API_KEY'],
-                                              search_tool = search_tool)
+                                              search_tool = brave_search_tool)
 
 query = "I want to get my daughter more interested in science. What kind of gifts should I get her?"
 
@@ -345,7 +345,7 @@ amazon_search_tool = ElasticsearchCloudSearchTool(tool_description=AMAZON_SEARCH
                                                   elasticsearch_index=index_name)
 
 client = claude_retriever.ClientWithRetrieval(api_key=os.environ['ANTHROPIC_API_KEY'],
-                                              search_tool = search_tool)
+                                              search_tool = amazon_search_tool)
 
 query = "I want to get my daughter more interested in science. What kind of gifts should I get her?"
 
