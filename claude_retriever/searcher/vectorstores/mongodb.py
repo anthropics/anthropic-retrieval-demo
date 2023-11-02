@@ -27,7 +27,7 @@ class MongoDBAtlasVectorStore(VectorStore):
     using Embedders and passed to the vectorstore for storage and retrieval. The class has the method self_load_index_embeddings is a wrapper to help do this.
     '''
 
-    def __init__(self, conn_str, db_name, col_name, embedding: Optional[Embedder]= LocalEmbedder(DEFAULT_EMBEDDER) , index_name='default', text_key='text', embedding_key='embedding') -> None:
+    def __init__(self, conn_str, db_name, col_name, embedding: Optional[Embedder]= LocalEmbedder(DEFAULT_EMBEDDER) , index_name='default', text_key='text', embedding_key='embedding', numCandidates=100) -> None:
         """
         Args:
             conn_str: MongoDB connection string to init connection client
@@ -47,6 +47,7 @@ class MongoDBAtlasVectorStore(VectorStore):
         self._index_name = index_name
         self.text_key = text_key
         self.embedding_key = embedding_key
+        self.numCandidates = numCandidates
 
         self._init_collection()
 
@@ -69,17 +70,31 @@ class MongoDBAtlasVectorStore(VectorStore):
                     self._collection.insert_many(idocs)
 
     def _get_vector_search_query(self,query_vector, k=10):
-        ## TODO update the to $vectorsearch syntax when the feature is GA.
-        return [{
-            "$search": {
-                "index": "default",
-                "knnBeta": {
-                "vector": query_vector.embedding,
-                "path": self.embedding_key,
-                "k": k
+        new_search_query = {
+                "$vectorSearch": {
+                    "index": "default",
+                    "path": self.embedding_key,
+                    "queryVector": query_vector.embedding,
+                    "numCandidates": self.numCandidates,
+                    "limit": k
                 }
-            }
-            },
+        }
+        old_search_query = {
+                "$search": {
+                    "index": "default",
+                    "knnBeta": {
+                    "vector": query_vector.embedding,
+                    "path": self.embedding_key,
+                    "k": k
+                    }
+                }
+        }
+        v1,v2,v3 = self._client.server_info()['version'].split(".")
+        if int(v1)>6 or (v1=='6' and int(v3)>=11):
+            search_query = new_search_query
+        else:
+            search_query = old_search_query
+        return [search_query,
             {"$project":{
                 "score":{
                             '$meta': 'searchScore'
@@ -88,6 +103,11 @@ class MongoDBAtlasVectorStore(VectorStore):
                 "_id": 0
             }}]
     
+    def create_search_index(self, index_mapping):
+        return self._collection.create_search_index(index_mapping)
+    
+    def check_search_index(self):
+        return self._collection.list_search_indexes()
 
     def query(self, query_embedding: Embedding, n_search_results_to_use: int = 10) -> list[SearchResult]:
         """
