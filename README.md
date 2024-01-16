@@ -32,13 +32,13 @@ This retrieval demo uses Python 3.10. Install it if you don't already have it.
 Clone the repository:
 
 ```
-git clone https://github.com/anthropic/claude-retriever-demo.git
+git clone https://github.com/anthropic/anthropic-retriever-demo.git
 ```
 
 Navigate into the demo directory:
 
 ```
-cd claude-retriever-demo
+cd anthropic-retriever-demo
 ``` 
 
 It's recommended to use a virtual environment. Create and activate one:
